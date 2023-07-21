@@ -80,7 +80,7 @@ reg_cor <- cor(ls_for$mean, tail(m_avg_roll_c,days))
 
 plot(data_lm)
 lines(ls_for$mean,col="red")
-legend("topleft", legend=c("original",  paste0("regression korelasyon:", round(reg_cor, digits = 3))),
+legend("topleft", legend=c("original",  sprintf("regression korelasyon: %s", round(reg_cor, digits = 3))),
        col=c("black", "red"), lty = 1:1, cex=0.8)
 
 # arima -------------------------------------------------------------------

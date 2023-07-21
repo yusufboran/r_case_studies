@@ -41,9 +41,9 @@ colors <-  scale_color_manual(
 ) 
 grafic_text <-  labs(
   x = "Zaman", 
-  y = "Euro/TL", 
+  y = "USD", 
   colour = "Tahmin",
-  title = "01.01.2020 - 01.06.2023 arası Euro/TL"
+  title = "EUR Aylık"
 )
 
 set_evds_key("bSjcFT2O0A")
