@@ -70,7 +70,7 @@ forecasting.packages <- function(dataset,name,count) {
   performance_table <- data_frame(
     dataset = name,
     type= "LSTM",
-    Metric = c("Correlation", "R^2","RMSE","MAE","Time"),
+    Metric = c("Cor", "R^2","RMSE","MAE","Time"),
     value =c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
   
    
@@ -96,7 +96,7 @@ forecasting.packages <- function(dataset,name,count) {
   start_time <- Sys.time()
   df <- data.frame(ds =time_train , y = y_train ) 
   m <- prophet(df,seasonality.mode = 'multiplicative',weekly.seasonality=FALSE,daily.seasonality=FALSE)
-  future <- make_future_dataframe(m, periods = days,  freq= (60*60*24*30* 1.013889) *12/count)
+  future <- make_future_dataframe(m, periods = days,  freq= (60*60*24) *365/count)
   f_prophet <- predict(m, future)
   end_time <- Sys.time()
 
@@ -112,7 +112,7 @@ correlation <- cor(y_test, tail(f_prophet$yhat,days))
 per_prophet<- data_frame(
   dataset = name,
   type= "Prophet",
-  Metric = c("Correlation", "R-squared","Root Mean Squared Error","Mean Absolute Error","Time"),
+  Metric = c("Cor", "R^2","RMSE","MAE","Time"),
   value = c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
 performance_table <- rbind(performance_table, per_prophet)
 
@@ -132,11 +132,17 @@ arima_prediction <- data_frame(
 finaly.df <- rbind(finaly.df, arima_prediction)
 
 postResample_metric <- postResample(y_test, tail(f_arima$mean,days))
-correlation <- cor(y_test, tail(f_arima$mean,days))
+
+x <-  tail(f_arima$mean,days)
+if(sd(x) == 0){
+  print("denem")
+  x[1] <- x[1] * .99
+}
+correlation <- cor(y_test,x)
 per_arima<- data_frame(
   dataset = name,
   type= "ARIMA",
-  Metric = c("Correlation", "R^2","RMSE","MAE","Time"),
+  Metric = c("Cor", "R^2","RMSE","MAE","Time"),
   value = c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
 performance_table <- rbind(performance_table, per_arima)
 
@@ -163,7 +169,7 @@ correlation <- cor(f_regression$mean,y_test)
 per_arima<- data_frame(
   dataset = name,
   type= "LR",
-  Metric = c("Correlation", "R-squared","Root Mean Squared Error","Mean Absolute Error","Time"),
+  Metric = c("Cor", "R^2","RMSE","MAE","Time"),
   value = c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
 performance_table <- rbind(performance_table, per_arima)
 
@@ -171,6 +177,50 @@ performance_table <- rbind(performance_table, per_arima)
 return(list(performance_table = performance_table, finaly.df =finaly.df))
 
 
+}
+
+completion.deficiencies <- function(dataset,name,freq) {
+  
+  euro.df <- data.frame(
+    tarih = dataset$time,
+    deger = dataset$value
+  )
+  tarih_araligi <- seq(from = min(euro.df$tarih), to = max(euro.df$tarih), by = "day")
+  euro.df <- data.frame(tarih = tarih_araligi) %>%
+    left_join(euro.df, by = "tarih")
+  
+  
+  for (i in 1:6) {
+    if (is.na(euro.df$deger[i])) {
+      
+      if (!is.na(euro.df$deger[i+1])) {
+        euro.df$deger[i] <- euro.df$deger[i+1]
+      }
+      else{
+        euro.df$deger[i] <- euro.df$deger[i-1]
+      }
+      
+    }
+  }
+  for (i in 6:length( euro.df$deger)) {
+    if (is.na(euro.df$deger[i])) {
+      ort <- euro.df$deger[i-1] + euro.df$deger[i-2] + euro.df$deger[i-3] + euro.df$deger[i-4] + euro.df$deger[i-5]
+      ort <-  ort / 5
+      euro.df$deger[i] <- euro.df$deger[i-1]
+    }
+  }
+  names(euro.df) <- c("time", "value")
+  dataset <- data.frame(
+    dataset = name,
+    frequency=freq,
+    time = euro.df$time,
+    value = euro.df$value
+  )
+  return(dataset)
+}
+
+normalize <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
 }
 
 graphic <- function(finaly.df) {
@@ -191,39 +241,5 @@ graphic.detail <- ggplot(data = finaly.df[  finaly.df$time >= "2022-1-1" , ],
     theme(text = element_text(size = 16),legend.position = "none")
   return(graphic.detail)
 }
-  
-multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
-  library(grid)
-  
-  # Make a list from the ... arguments and plotlist
-  plots <- c(list(...), plotlist)
-  
-  numPlots = length(plots)
-  
-  # If layout is NULL, then use 'cols' to determine layout
-  if (is.null(layout)) {
-    # Make the panel
-    # ncol: Number of columns of plots
-    # nrow: Number of rows needed, calculated from # of cols
-    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
-                     ncol = cols, nrow = ceiling(numPlots/cols))
-  }
-  
-  if (numPlots==1) {
-    print(plots[[1]])
-    
-  } else {
-    # Set up the page
-    grid.newpage()
-    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
-    
-    # Make each plot, in the correct location
-    for (i in 1:numPlots) {
-      # Get the i,j matrix positions of the regions that contain this subplot
-      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
-      
-      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
-                                      layout.pos.col = matchidx$col))
-    }
-  }
-}
+
+
