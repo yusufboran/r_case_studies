@@ -11,9 +11,8 @@ colors <- list(
   parachute_purple = "#332851",
   aqua_fiesta = "#77aeaf"
 )
-
 #import dataset
-ges_dataset <- read_excel("C:/Users/yusuf/Desktop/ges_dataset.xlsx")
+ges_dataset <-read_excel("D:/yl/dataset/sunges_dataset.xlsx")
 #char to time
 ges_dataset$Zaman <- as.Date(ges_dataset$Zaman,"%Y-%m-%d")   
 ges_dataset <- ges_dataset[!is.na(ges_dataset$ORTALAMA_SICAKLIK), ]

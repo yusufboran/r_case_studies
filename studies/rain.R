@@ -26,7 +26,7 @@ normalization <- function(arr) {
   return(arr)
 }
 
-rain <- read_csv("C:/Users/yusuf/Desktop/burdurPERSIANN_20000301_20190301.csv")
+rain <-read_csv("D:/yl/dataset/burdurPERSIANN_20000301_20190301.csv")
 rain <-   head(rain, -1)
 time <- as.Date( ymd(substr(rain$Time, 12, 19)))
 rain <- rain$`Rain(mm)`

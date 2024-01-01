@@ -1,8 +1,7 @@
 
-forecasting.packages <- function(dataset,name,count) {
+forecasting.packages <- function(dataset,datasetname,frequency,count) {
   
   dataset <- data.frame(time =  dataset$time, value =  dataset$value)
-  
   
   days <- count
   time <- dataset$time
@@ -32,11 +31,9 @@ forecasting.packages <- function(dataset,name,count) {
   x_test     <- tail(train,days) 
   y_test     <- tail(euro,days) 
   
-  dataset.df <- data.frame( dataset = name, type=strsplit(name, " ")[[1]][1], time = dataset$time, value=dataset$value )
+  dataset.df <- data.frame( dataset = datasetname,frequency =frequency, type=datasetname, time = dataset$time, value=dataset$value )
   finaly.df <- dataset.df
   
-  
- 
   start_time <- Sys.time()
   model = keras_model_sequential() %>%   
     layer_lstm(units=128, input_shape=c(step, 1), activation="relu") %>%  
@@ -57,8 +54,9 @@ forecasting.packages <- function(dataset,name,count) {
   f_lstm  <- model %>% predict(x_test)
   end_time <- Sys.time()
   
-  lstm_prediction <- data_frame(
-    dataset = name,
+  lstm_prediction <- data.frame(
+    dataset = datasetname,
+    frequency=frequency,
     type= "LSTM",
     time =tail(time,days),
     value =f_lstm)
@@ -67,11 +65,19 @@ forecasting.packages <- function(dataset,name,count) {
   
   postResample_metric <- postResample(y_test,f_lstm)
   correlation <-cor(y_test,f_lstm)
-  performance_table <- data_frame(
-    dataset = name,
-    type= "LSTM",
-    Metric = c("Cor", "R^2","RMSE","MAE","Time"),
-    value =c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
+  mape <- mean(abs((y_test - f_lstm) / y_test)) * 100
+  
+  
+  performance_table <- data.frame(
+   datasetname = datasetname,
+   frequency=frequency,
+   model="LSTM",
+   cor = correlation,
+   num1 = as.numeric(  postResample_metric[2]),
+   num2 = as.numeric(postResample_metric[1]),
+   num3 = as.numeric (postResample_metric[3]),
+   num4 = mape,
+   num5 =  as.numeric(end_time - start_time))
   
    
   # prophet ----------------------------------------------------------------- 
@@ -100,21 +106,22 @@ forecasting.packages <- function(dataset,name,count) {
   f_prophet <- predict(m, future)
   end_time <- Sys.time()
 
-prophet_prediction <- data_frame(
-  dataset = name,
+prophet_prediction <- data.frame(
+  dataset = datasetname,
+  frequency=frequency,
   type= "Prophet",
   time =tail(time,days),
   value =tail(f_prophet$yhat,days))
 finaly.df <- rbind(finaly.df, prophet_prediction)
 
+mape <- mean(abs((y_test - tail(f_prophet$yhat,days)) / y_test)) * 100
 postResample_metric <- postResample(y_test, tail(f_prophet$yhat,days))
 correlation <- cor(y_test, tail(f_prophet$yhat,days))
-per_prophet<- data_frame(
-  dataset = name,
-  type= "Prophet",
-  Metric = c("Cor", "R^2","RMSE","MAE","Time"),
-  value = c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
-performance_table <- rbind(performance_table, per_prophet)
+
+performance_table <- rbind(performance_table,
+                           list(datasetname,frequency,"Prophet",correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),mape, as.numeric(end_time - start_time) ))
+
+
 
 # arima -------------------------------------------------------------------
 start_time <- Sys.time()
@@ -123,8 +130,9 @@ arima_model <- auto.arima(ts_data)
 f_arima <- forecast(arima_model, h = days)
 plot(f_arima)
 end_time <- Sys.time()
-arima_prediction <- data_frame(
-  dataset = name,
+arima_prediction <- data.frame(
+  dataset = datasetname,
+  frequency=frequency,
   type= "ARIMA",
   time =tail(time,days),
   value =f_arima$mean)
@@ -135,16 +143,14 @@ postResample_metric <- postResample(y_test, tail(f_arima$mean,days))
 
 x <-  tail(f_arima$mean,days)
 if(sd(x) == 0){
-  print("denem")
   x[1] <- x[1] * .99
 }
 correlation <- cor(y_test,x)
-per_arima<- data_frame(
-  dataset = name,
-  type= "ARIMA",
-  Metric = c("Cor", "R^2","RMSE","MAE","Time"),
-  value = c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
-performance_table <- rbind(performance_table, per_arima)
+mape <- mean(abs((y_test - x) / y_test)) * 100
+
+performance_table <- rbind(performance_table,
+                           list(datasetname,frequency,"Arima",correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),mape, as.numeric(end_time - start_time) ))
+
 
 
 # logarithmic regression --------------------------------------------------
@@ -154,8 +160,9 @@ fit <- tslm(y ~ poly(trend,degree = 2) )
 f_regression <- forecast(fit, h=days)
 plot(f_regression)
 end_time <- Sys.time()
-lregression_prediction <- data_frame(
-  dataset = name,
+lregression_prediction <- data.frame(
+  dataset = datasetname,
+  frequency=frequency,
   type= "LR",
   time =tail(time,days),
   
@@ -166,55 +173,83 @@ finaly.df <- rbind(finaly.df, lregression_prediction)
 
 postResample_metric <- postResample(f_regression$mean,y_test)
 correlation <- cor(f_regression$mean,y_test)
-per_arima<- data_frame(
-  dataset = name,
-  type= "LR",
-  Metric = c("Cor", "R^2","RMSE","MAE","Time"),
-  value = c(correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),end_time - start_time ))
-performance_table <- rbind(performance_table, per_arima)
+mape <- mean(abs((y_test - x) / f_regression$mean)) * 100
+
+performance_table <- rbind(performance_table,
+                           list(datasetname,frequency,"LR",correlation, as.numeric(  postResample_metric[2]), as.numeric(postResample_metric[1]),   as.numeric (postResample_metric[3]),mape, as.numeric(end_time - start_time) ))
 
 
 return(list(performance_table = performance_table, finaly.df =finaly.df))
 
+}
 
+completion.time <- function(dataset) {
+  
+  euro.df <- data.frame(
+    time = dataset$time,
+    value = dataset$value
+  )
+  time_araligi <- seq(from = min(euro.df$time), to = max(euro.df$time), by = "day")
+  euro.df <- data.frame(time = time_araligi) %>%
+    left_join(euro.df, by = "time")
+  
+  return(euro.df)
+}
+
+completion.values <- function(arr) {
+  
+  
+  for (i in 1:6) {
+    if (is.na(arr[i])) {
+      
+      if (!is.na(arr[i+1])) {
+        arr[i] <- arr[i+1]
+      }
+      else{
+        arr[i] <- arr[i-1]
+      }
+      
+    }
+  }
+  for (i in 6:length( arr)) {
+    if (is.na(arr[i])) {
+      ort <- arr[i-1] + arr[i-2] + arr[i-3] + arr[i-4] + arr[i-5]
+      ort <-  ort / 5
+      arr[i] <- arr[i-1]
+    }
+  }
+  
+  return(arr)
 }
 
 completion.deficiencies <- function(dataset,name,freq) {
   
-  euro.df <- data.frame(
-    tarih = dataset$time,
-    deger = dataset$value
-  )
-  tarih_araligi <- seq(from = min(euro.df$tarih), to = max(euro.df$tarih), by = "day")
-  euro.df <- data.frame(tarih = tarih_araligi) %>%
-    left_join(euro.df, by = "tarih")
-  
   
   for (i in 1:6) {
-    if (is.na(euro.df$deger[i])) {
+    if (is.na(dataset$value[i])) {
       
-      if (!is.na(euro.df$deger[i+1])) {
-        euro.df$deger[i] <- euro.df$deger[i+1]
+      if (!is.na(dataset$value[i+1])) {
+        dataset$value[i] <- dataset$value[i+1]
       }
       else{
-        euro.df$deger[i] <- euro.df$deger[i-1]
+        dataset$value[i] <- dataset$value[i-1]
       }
       
     }
   }
-  for (i in 6:length( euro.df$deger)) {
-    if (is.na(euro.df$deger[i])) {
-      ort <- euro.df$deger[i-1] + euro.df$deger[i-2] + euro.df$deger[i-3] + euro.df$deger[i-4] + euro.df$deger[i-5]
+  for (i in 6:length( dataset$value)) {
+    if (is.na(dataset$value[i])) {
+      ort <- dataset$value[i-1] + dataset$value[i-2] + dataset$value[i-3] + dataset$value[i-4] + dataset$value[i-5]
       ort <-  ort / 5
-      euro.df$deger[i] <- euro.df$deger[i-1]
+      dataset$value[i] <- dataset$value[i-1]
     }
   }
-  names(euro.df) <- c("time", "value")
+  names(dataset) <- c("time", "value")
   dataset <- data.frame(
     dataset = name,
     frequency=freq,
-    time = euro.df$time,
-    value = euro.df$value
+    time = dataset$time,
+    value = dataset$value
   )
   return(dataset)
 }
@@ -222,24 +257,3 @@ completion.deficiencies <- function(dataset,name,freq) {
 normalize <- function(x) {
   (x - min(x)) / (max(x) - min(x))
 }
-
-graphic <- function(finaly.df) {
-  
-  ggplot(data = finaly.df, aes(x = time, y = value, colour = type)) +
-    geom_line(size=2) +colors +
-    theme(text = element_text(size = 16))
-  
-graphic.detail <- ggplot(data = finaly.df[  finaly.df$time >= "2022-1-1" , ], 
-         aes(x = time, y = value, colour = type)) +
-    geom_line(size=2) +
-    colors +
-    labs(
-      x = "Zaman", 
-      y = "USD", 
-      colour = "Göstergeler"
-    )+
-    theme(text = element_text(size = 16),legend.position = "none")
-  return(graphic.detail)
-}
-
-
